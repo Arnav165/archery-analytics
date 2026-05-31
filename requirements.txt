@@ -1,5 +1,6 @@
-requests==2.32.3
-pandas==2.2.2
-streamlit==1.36.0
-plotly==5.22.0
-pycountry==24.6.1
+requests>=2.32.3
+pandas>=2.2.3
+streamlit>=1.38.0
+plotly>=5.22.0
+pycountry>=24.6.1
+Pillow>=11.0.0
