@@ -18,7 +18,7 @@ class TournamentScraper(BaseScraper):
 
     def get_competition_list(self) -> list[dict]:
         """Scrape the results calendar for all listed competitions."""
-        soup = self.get(f"{BASE_URL}/events/results")
+        soup = self.get(f"{BASE_URL}/events/results", wait_selector="a[href*='/competition/']", wait_ms=5000)
         if not soup:
             return []
 
@@ -59,7 +59,7 @@ class TournamentScraper(BaseScraper):
     def get_competition_detail(self, comp_id: int) -> dict:
         """Scrape metadata and results for a single competition."""
         url = f"{BASE_URL}/competition/{comp_id}"
-        soup = self.get(url)
+        soup = self.get(url, wait_selector="h1", wait_ms=5000)
         if not soup:
             return {}
 
@@ -98,7 +98,7 @@ class TournamentScraper(BaseScraper):
 
     def get_event_results(self, event_url: str) -> list[dict]:
         """Scrape result rows from an individual event results page."""
-        soup = self.get(event_url)
+        soup = self.get(event_url, wait_selector="table", wait_ms=6000)
         if not soup:
             return []
 
@@ -128,8 +128,8 @@ class TournamentScraper(BaseScraper):
 
     def get_medal_table(self, comp_id: int) -> list[dict]:
         """Scrape the medal table for a competition."""
-        url = f"{BASE_URL}/competition/{comp_id}/medal-table"
-        soup = self.get(url)
+        url = f"{BASE_URL}/competition/{comp_id}/medal-standings"
+        soup = self.get(url, wait_selector="table", wait_ms=6000)
         if not soup:
             return []
 

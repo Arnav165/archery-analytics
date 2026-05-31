@@ -11,7 +11,7 @@ class AthleteScraper(BaseScraper):
     def get_rankings(self, discipline: str = "recurve", gender: str = "men") -> list[dict]:
         """Scrape world rankings for a given discipline and gender."""
         url = f"{BASE_URL}/rankings/world-ranking?discipline={discipline}&gender={gender}"
-        soup = self.get(url)
+        soup = self.get(url, wait_selector="table", wait_ms=6000)
         if not soup:
             return []
 
@@ -54,7 +54,7 @@ class AthleteScraper(BaseScraper):
     def get_athlete_profile(self, athlete_id: int) -> dict:
         """Scrape an individual athlete's profile page."""
         url = f"{BASE_URL}/athletes/{athlete_id}"
-        soup = self.get(url)
+        soup = self.get(url, wait_selector="h1", wait_ms=5000)
         if not soup:
             return {}
 
