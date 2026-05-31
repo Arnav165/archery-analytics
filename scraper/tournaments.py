@@ -4,7 +4,7 @@ from .base import BaseScraper, BASE_URL
 
 
 class TournamentScraper(BaseScraper):
-    """Scrapes tournament results from worldarchery.sport."""
+    """Scrapes tournament results from www.worldarchery.sport."""
 
     # Known high-value competition IDs to seed scraping
     SEED_IDS = [

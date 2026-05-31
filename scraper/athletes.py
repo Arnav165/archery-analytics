@@ -10,7 +10,7 @@ class AthleteScraper(BaseScraper):
 
     def get_rankings(self, discipline: str = "recurve", gender: str = "men") -> list[dict]:
         """Scrape world rankings for a given discipline and gender."""
-        url = f"{BASE_URL}/ranking/world-ranking/{discipline}/{gender}"
+        url = f"{BASE_URL}/rankings/world-ranking?discipline={discipline}&gender={gender}"
         soup = self.get(url)
         if not soup:
             return []
@@ -28,9 +28,10 @@ class AthleteScraper(BaseScraper):
                     row[key] = val
 
                 # Extract athlete profile link if present
-                for a in tr.select("a[href*='/athlete/']"):
+                # Profile links may appear as /athletes/{id} or /athlete/{id}
+                for a in tr.select("a[href*='/athlete']"):
                     href = a.get("href", "")
-                    match = re.search(r"/athlete/(\d+)", href)
+                    match = re.search(r"/athletes?/(\d+)", href)
                     if match:
                         row["athlete_id"] = int(match.group(1))
                         row["profile_url"] = BASE_URL + href if href.startswith("/") else href
@@ -52,7 +53,7 @@ class AthleteScraper(BaseScraper):
 
     def get_athlete_profile(self, athlete_id: int) -> dict:
         """Scrape an individual athlete's profile page."""
-        url = f"{BASE_URL}/athlete/{athlete_id}"
+        url = f"{BASE_URL}/athletes/{athlete_id}"
         soup = self.get(url)
         if not soup:
             return {}

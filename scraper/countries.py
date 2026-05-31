@@ -6,7 +6,7 @@ class CountryScraper(BaseScraper):
 
     def get_country_list(self) -> list[dict]:
         """Scrape the list of member countries/NOCs."""
-        url = f"{BASE_URL}/about-us/member-associations"
+        url = f"{BASE_URL}/members"
         soup = self.get(url)
         if not soup:
             return []

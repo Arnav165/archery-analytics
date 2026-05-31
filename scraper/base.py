@@ -2,7 +2,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-BASE_URL = "https://worldarchery.sport"
+BASE_URL = "https://www.worldarchery.sport"
 
 HEADERS = {
     "User-Agent": (
@@ -23,7 +23,7 @@ class BaseScraper:
 
     def get(self, url: str) -> BeautifulSoup | None:
         try:
-            resp = self.session.get(url, timeout=15)
+            resp = self.session.get(url, timeout=15, allow_redirects=True)
             resp.raise_for_status()
             time.sleep(self.delay)
             return BeautifulSoup(resp.text, "lxml")
