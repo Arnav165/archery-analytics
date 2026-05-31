@@ -32,6 +32,11 @@ st.markdown(
 @st.cache_data(ttl=3600)
 def load_data() -> dict[str, pd.DataFrame]:
     if not DB_PATH.exists():
+        # Auto-fetch on first deploy (no DB committed to repo)
+        with st.spinner("Building database from Olympic dataset — takes ~10 seconds..."):
+            import fetcher
+            fetcher.run()
+    if not DB_PATH.exists():
         return {k: pd.DataFrame() for k in ("events", "athletes", "competitions", "medals")}
     with sqlite3.connect(DB_PATH) as conn:
         tables = [r[0] for r in conn.execute(
