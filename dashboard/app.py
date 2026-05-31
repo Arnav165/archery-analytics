@@ -31,17 +31,19 @@ st.markdown(
 def load_data():
     pipeline = DataPipeline()
     return {
-        "tournaments": pipeline.load("tournaments"),
-        "athletes": pipeline.load("athletes"),
+        "competitions": pipeline.load("competitions"),
+        "athletes": pipeline.load("biographies"),
         "medals": pipeline.load("medals"),
-        "results": pipeline.load("results"),
+        "medallists": pipeline.load("medallists"),
+        "rankings": pipeline.load("rankings"),
+        "records": pipeline.load("records"),
     }
 
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🏹 Archery Analytics")
-    st.markdown("Data sourced from [World Archery](https://worldarchery.sport)")
+    st.markdown("Data sourced from [World Archery API](https://api.worldarchery.org/v4/API/)")
     st.markdown("---")
     page = st.radio(
         "Navigate",
@@ -60,14 +62,14 @@ tables_loaded = [k for k, v in data.items() if not v.empty]
 if tables_loaded:
     st.sidebar.success(f"Loaded: {', '.join(tables_loaded)}")
 else:
-    st.sidebar.warning("No data found. Run: `python main.py scrape`")
+    st.sidebar.warning("No data found. Run: `python main.py fetch`")
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
 if page == "World Medal Map":
     world_map.render(data["medals"])
 
 elif page == "Head-to-Head":
-    head_to_head.render(data["results"], data["athletes"])
+    head_to_head.render(data["medallists"], data["athletes"])
 
 elif page == "Tournament Browser":
-    tournament_browser.render(data["tournaments"], data["results"])
+    tournament_browser.render(data["competitions"], data["medallists"])

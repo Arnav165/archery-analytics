@@ -115,7 +115,7 @@ def render(results_df: pd.DataFrame, athletes_df: pd.DataFrame):
         names = sorted(results_df["name"].dropna().unique().tolist())
 
     if len(names) < 2:
-        st.info("Not enough athlete data. Run the scraper first (`python main.py scrape`).")
+        st.info("Not enough athlete data. Run `python main.py fetch` first.")
         return
 
     col1, col2 = st.columns(2)

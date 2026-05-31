@@ -7,7 +7,7 @@ def render(tournaments_df: pd.DataFrame, results_df: pd.DataFrame):
     st.subheader("Tournament Browser")
 
     if tournaments_df.empty:
-        st.info("No tournament data loaded. Run the scraper first (`python main.py scrape`).")
+        st.info("No tournament data loaded. Run `python main.py fetch` first.")
         return
 
     # --- Filters ---
@@ -15,19 +15,20 @@ def render(tournaments_df: pd.DataFrame, results_df: pd.DataFrame):
     fc1, fc2, fc3 = st.columns(3)
 
     with fc1:
-        if "date" in tournaments_df.columns:
-            years = sorted(
-                tournaments_df["date"].dropna().dt.year.unique().tolist(),
-                reverse=True,
-            )
+        date_col = next((c for c in ("date_from", "date") if c in tournaments_df.columns), None)
+        if date_col:
+            tournaments_df[date_col] = pd.to_datetime(tournaments_df[date_col], errors="coerce")
+            years = sorted(tournaments_df[date_col].dropna().dt.year.unique().tolist(), reverse=True)
             years_opts = ["All"] + [str(y) for y in years]
             selected_year = st.selectbox("Year", years_opts, key="tb_year")
         else:
+            date_col = None
             selected_year = "All"
 
     with fc2:
-        if "location" in tournaments_df.columns:
-            locations = ["All"] + sorted(tournaments_df["location"].dropna().unique().tolist())
+        loc_col = next((c for c in ("place", "location", "venue") if c in tournaments_df.columns), None)
+        if loc_col:
+            locations = ["All"] + sorted(tournaments_df[loc_col].dropna().unique().tolist())
             selected_loc = st.selectbox("Location", locations, key="tb_loc")
         else:
             selected_loc = "All"
@@ -41,11 +42,11 @@ def render(tournaments_df: pd.DataFrame, results_df: pd.DataFrame):
     # --- Apply filters ---
     df = tournaments_df.copy()
 
-    if selected_year != "All" and "date" in df.columns:
-        df = df[df["date"].dt.year == int(selected_year)]
+    if selected_year != "All" and date_col:
+        df = df[df[date_col].dt.year == int(selected_year)]
 
-    if selected_loc != "All" and "location" in df.columns:
-        df = df[df["location"] == selected_loc]
+    if selected_loc != "All" and loc_col:
+        df = df[df[loc_col] == selected_loc]
 
     if search and "name" in df.columns:
         df = df[df["name"].str.contains(search, case=False, na=False)]
@@ -57,7 +58,7 @@ def render(tournaments_df: pd.DataFrame, results_df: pd.DataFrame):
         return
 
     # --- Tournament list ---
-    display_cols = [c for c in ("name", "date", "location") if c in df.columns]
+    display_cols = [c for c in ("name", "date_from", "date_to", "place", "country_name", "level") if c in df.columns]
     st.dataframe(df[display_cols].reset_index(drop=True), use_container_width=True)
 
     # --- Select one tournament to drill into ---
@@ -77,7 +78,7 @@ def render(tournaments_df: pd.DataFrame, results_df: pd.DataFrame):
             st.markdown(f"Location: **{tournament_row['location']}**")
 
         # Filter results to this tournament
-        comp_id = tournament_row.get("id")
+        comp_id = tournament_row.get("competition_id")
         t_results = pd.DataFrame()
         if not results_df.empty and comp_id and "competition_id" in results_df.columns:
             t_results = results_df[results_df["competition_id"] == comp_id]

@@ -35,7 +35,7 @@ def render(medals_df: pd.DataFrame):
     st.subheader("World Medal Map")
 
     if medals_df.empty:
-        st.info("No medal data loaded. Run the scraper first (`python main.py scrape`).")
+        st.info("No medal data loaded. Run `python main.py fetch` first.")
         return
 
     medal_type = st.radio(

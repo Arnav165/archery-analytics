@@ -1,86 +1,106 @@
 """
-Entry point for the archery analytics project.
+Archery Analytics — entry point.
 
 Usage:
-    python main.py scrape       # Phase 1 + 2: scrape then clean & store
-    python main.py dashboard    # Phase 3: launch Streamlit dashboard
-    python main.py all          # scrape + launch dashboard
+    python main.py fetch        # Pull data from World Archery API → store in SQLite
+    python main.py dashboard    # Launch Streamlit dashboard
+    python main.py all          # fetch + dashboard
 """
 import subprocess
 import sys
 
+from api import AthletesAPI, RankingsAPI, CompetitionsAPI, RecordsAPI
+from api.client import WAClient
 from pipeline import DataPipeline
-from scraper import TournamentScraper, AthleteScraper, CountryScraper
 
 
-def run_scrape():
+def run_fetch():
+    client = WAClient(delay=0.3)
     pipeline = DataPipeline()
 
-    # All scrapers share one Playwright browser instance via context manager
-    with TournamentScraper() as t_scraper, \
-         AthleteScraper() as a_scraper, \
-         CountryScraper() as c_scraper:
+    athletes_api = AthletesAPI(client)
+    rankings_api = RankingsAPI(client)
+    comps_api = CompetitionsAPI(client)
+    records_api = RecordsAPI(client)
 
-        # --- Tournaments ---
-        print("\n[1/4] Scraping competition list...")
-        competitions = t_scraper.get_competition_list()
-        pipeline.save_raw(competitions, "competitions_raw")
-        tournaments_df = pipeline.clean_tournaments(competitions)
-        pipeline.to_sqlite(tournaments_df, "tournaments")
-        print(f"      {len(tournaments_df)} tournaments stored.")
+    # ── Athletes ──────────────────────────────────────────────────────
+    print("\n[1/4] Athletes")
+    athletes_raw = athletes_api.get_athletes()
+    pipeline.save_raw(athletes_raw, "athletes_raw")
+    athletes_df = pipeline.clean_athletes(athletes_raw)
+    pipeline.to_sqlite(athletes_df, "athletes")
 
-        # --- Results (seed IDs only to avoid hammering the server) ---
-        print("\n[2/4] Scraping event results for seeded competitions...")
-        all_results = []
-        for comp in competitions[:10]:  # limit to first 10 on initial run
-            comp_id = comp["id"]
-            detail = t_scraper.get_competition_detail(comp_id)
-            for event in detail.get("event_links", [])[:5]:  # max 5 events per comp
-                rows = t_scraper.get_event_results(event["url"])
-                for r in rows:
-                    r["competition_id"] = comp_id
-                    r["competition_name"] = comp.get("name", "")
-                all_results.extend(rows)
-            print(f"      comp {comp_id}: {len(detail.get('event_links', []))} events found")
+    # Fetch full biographies for the first 200 athletes to keep runtime
+    # reasonable on first run. Remove the slice to get everyone.
+    athlete_ids = [a["athlete_id"] for a in athletes_raw[:200] if a.get("athlete_id")]
+    bios_raw = athletes_api.get_biographies(athlete_ids)
+    pipeline.save_raw(bios_raw, "biographies_raw")
+    bios_df = pipeline.clean_biographies(bios_raw)
+    pipeline.to_sqlite(bios_df, "biographies")
 
-        pipeline.save_raw(all_results, "results_raw")
-        results_df = pipeline.clean_results(all_results)
-        pipeline.to_sqlite(results_df, "results")
-        print(f"      {len(results_df)} result rows stored.")
+    # ── Rankings ──────────────────────────────────────────────────────
+    print("\n[2/4] World Rankings")
+    rankings_raw = rankings_api.get_world_rankings()
+    pipeline.save_raw(rankings_raw, "rankings_raw")
+    rankings_df = pipeline.clean_rankings(rankings_raw)
+    pipeline.to_sqlite(rankings_df, "rankings")
 
-        # --- Athletes / Rankings ---
-        print("\n[3/4] Scraping world rankings...")
-        rankings = a_scraper.get_all_rankings()
-        pipeline.save_raw(rankings, "rankings_raw")
-        athletes_df = pipeline.clean_athletes(rankings)
-        pipeline.to_sqlite(athletes_df, "athletes")
-        print(f"      {len(athletes_df)} athlete records stored.")
+    # ── Competitions + Medallists ─────────────────────────────────────
+    print("\n[3/4] Competitions & Medallists")
+    comps_raw = comps_api.get_competitions(with_results_only=True)
+    pipeline.save_raw(comps_raw, "competitions_raw")
+    comps_df = pipeline.clean_competitions(comps_raw)
+    pipeline.to_sqlite(comps_df, "competitions")
 
-        # --- Country medal table ---
-        print("\n[4/4] Building all-time medal table...")
-        medals = c_scraper.get_all_time_medals()
-        pipeline.save_raw(medals, "medals_raw")
-        medals_df = pipeline.clean_medals(medals)
-        pipeline.to_sqlite(medals_df, "medals")
-        print(f"      {len(medals_df)} countries in medal table.")
+    # Fetch medallists for the 50 most recent competitions
+    recent_ids = comps_df["competition_id"].dropna().astype(int).tolist()[:50]
+    medallists_raw = comps_api.get_all_medallists(recent_ids)
+    pipeline.save_raw(medallists_raw, "medallists_raw")
+    medallists_df = pipeline.clean_medallists(medallists_raw)
+    pipeline.to_sqlite(medallists_df, "medallists")
 
-    print("\n✓ Scrape complete. Data stored in data/processed/archery.db")
+    # Build country medal aggregate from medallists
+    if not medallists_df.empty:
+        medals_agg = (
+            medallists_df.groupby(["noc", "medal"])
+            .size()
+            .unstack(fill_value=0)
+            .reset_index()
+        )
+        for col in ("Gold", "Silver", "Bronze"):
+            if col not in medals_agg.columns:
+                medals_agg[col] = 0
+        medals_agg["total"] = medals_agg.get("Gold", 0) + medals_agg.get("Silver", 0) + medals_agg.get("Bronze", 0)
+        medals_agg = medals_agg.rename(columns={"noc": "country", "Gold": "gold", "Silver": "silver", "Bronze": "bronze"})
+        pipeline.to_sqlite(medals_agg, "medals")
+
+    # ── Records ───────────────────────────────────────────────────────
+    print("\n[4/4] World Records")
+    records_raw = records_api.get_records()
+    pipeline.save_raw(records_raw, "records_raw")
+    records_df = pipeline.clean_records(records_raw)
+    pipeline.to_sqlite(records_df, "records")
+
+    print(f"\n✓ Done. Tables: {pipeline.list_tables()}")
 
 
 def run_dashboard():
     print("Launching Streamlit dashboard...")
-    subprocess.run([sys.executable, "-m", "streamlit", "run", "dashboard/app.py"], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "streamlit", "run", "dashboard/app.py"],
+        check=True,
+    )
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
 
-    if cmd == "scrape":
-        run_scrape()
+    if cmd == "fetch":
+        run_fetch()
     elif cmd == "dashboard":
         run_dashboard()
     elif cmd == "all":
-        run_scrape()
+        run_fetch()
         run_dashboard()
     else:
         print(__doc__)
