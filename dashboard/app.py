@@ -1,12 +1,15 @@
+import sqlite3
 import sys
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pipeline import DataPipeline
 from dashboard.components import world_map, head_to_head, tournament_browser
+
+DB_PATH = Path(__file__).parent.parent / "data" / "processed" / "archery.db"
 
 st.set_page_config(
     page_title="Archery Analytics",
@@ -15,7 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Dark theme overrides
 st.markdown(
     """
     <style>
@@ -28,22 +30,20 @@ st.markdown(
 
 
 @st.cache_data(ttl=3600)
-def load_data():
-    pipeline = DataPipeline()
-    return {
-        "competitions": pipeline.load("competitions"),
-        "athletes": pipeline.load("biographies"),
-        "medals": pipeline.load("medals"),
-        "medallists": pipeline.load("medallists"),
-        "rankings": pipeline.load("rankings"),
-        "records": pipeline.load("records"),
-    }
+def load_data() -> dict[str, pd.DataFrame]:
+    if not DB_PATH.exists():
+        return {k: pd.DataFrame() for k in ("events", "athletes", "competitions", "medals")}
+    with sqlite3.connect(DB_PATH) as conn:
+        tables = [r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()]
+        return {t: pd.read_sql(f"SELECT * FROM {t}", conn) for t in tables}
 
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🏹 Archery Analytics")
-    st.markdown("Data sourced from [World Archery API](https://api.worldarchery.org/v4/API/)")
+    st.caption("Olympic Archery · 1900–2016")
     st.markdown("---")
     page = st.radio(
         "Navigate",
@@ -51,25 +51,31 @@ with st.sidebar:
         key="nav",
     )
     st.markdown("---")
-    if st.button("🔄 Refresh data cache"):
+    if st.button("🔄 Refresh cache"):
         st.cache_data.clear()
         st.rerun()
 
-# ── Load data ─────────────────────────────────────────────────────────────────
+# ── Load ──────────────────────────────────────────────────────────────────────
 data = load_data()
 
-tables_loaded = [k for k, v in data.items() if not v.empty]
-if tables_loaded:
-    st.sidebar.success(f"Loaded: {', '.join(tables_loaded)}")
+if data.get("medals", pd.DataFrame()).empty:
+    st.sidebar.warning("No data yet — run: `python main.py fetch`")
 else:
-    st.sidebar.warning("No data found. Run: `python main.py fetch`")
+    total = int(data["medals"]["total"].sum()) if "total" in data["medals"].columns else 0
+    st.sidebar.success(f"{total} medals across {len(data.get('competitions', []))} Games")
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
 if page == "World Medal Map":
-    world_map.render(data["medals"])
+    world_map.render(data.get("medals", pd.DataFrame()))
 
 elif page == "Head-to-Head":
-    head_to_head.render(data["medallists"], data["athletes"])
+    head_to_head.render(
+        data.get("events", pd.DataFrame()),
+        data.get("athletes", pd.DataFrame()),
+    )
 
 elif page == "Tournament Browser":
-    tournament_browser.render(data["competitions"], data["medallists"])
+    tournament_browser.render(
+        data.get("competitions", pd.DataFrame()),
+        data.get("events", pd.DataFrame()),
+    )
